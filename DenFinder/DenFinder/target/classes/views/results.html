@@ -1,0 +1,238 @@
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org" class="no-js">
+
+<head>
+    <meta charset="utf-8">
+    <title>denfinder</title>
+    <meta name="description" content="">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- Place favicon.ico and apple-touch-icon.png in the root directory -->
+
+    <!-- build:css styles/main.css -->
+    <link rel="stylesheet" href="/css/bootstrap.css">
+    <link rel="stylesheet" href="/css/global.css">
+    <!-- endbuild -->
+
+</head>
+
+<body>
+    <!--[if lt IE 10]>
+      <p class="browsehappy">You are using an <strong>outdated</strong> browser. Please <a href="http://browsehappy.com/">upgrade your browser</a> to improve your experience.</p>
+    <![endif]-->
+
+    <style>
+        html,
+        body,
+        #map-canvas {
+            height: 100%;
+            margin: 0px;
+            padding: 0px
+        }
+    </style>
+
+    <script src="https://maps.googleapis.com/maps/api/js?v=3.exp&amp;libraries=visualization" type="text/javascript"></script>
+    <script th:inline="javascript" type="text/javascript">
+        /*<![CDATA[*/
+        var schools = /*[[${map.schoolList}]]*/ null;
+        var ratingData = [];
+        var map = /*[[${map.rawMap}]]*/ null;
+        for (var i = 0; i < map.length; ++i) {
+            for (var j = 0; j < map[i].length; j++) {
+                /*var dataPoint = {location: new google.maps.LatLng(map[i][j].location.latitude, map[i][j].location.longitude), weight: map[i][j].rating};*/
+                var dataPoint = {
+                    location: new google.maps.LatLng(map[i][j].location.latitude, map[i][j].location.longitude),
+                    weight: map[i][j].rating / 1000
+                };
+                ratingData.push(dataPoint);
+            }
+        }
+
+        function initialize() {
+
+            var map = /*[[${map.rawMap}]]*/ null;
+            var center = map[Math.floor(map.length / 2)][Math.floor(map.length / 2)].location;
+            var mapOptions = {
+                // zoom: 12,
+                center: new google.maps.LatLng(center.latitude, center.longitude),
+                mapTypeId: google.maps.MapTypeId.ROADMAP,
+                //disableDefaultUI: true,
+                scrollwheel: false
+                //draggable: false,
+                //draggableCursor: 'default'
+            };
+
+            map = new google.maps.Map(document.getElementById('map-canvas'), mapOptions);
+
+            var marker = null;
+
+            function addSchoolMarkers() {
+
+            for (var i = 0; i < schools.length; i++) {
+                var latLng = new google.maps.LatLng(schools[i].location.latitude, schools[i].location.longitude);
+                marker = new google.maps.Marker({
+                position: latLng,
+                map: map,
+                animation:google.maps.Animation.DROP,
+                title: schools[i].name
+                });
+                marker.setMap(map);
+                google.maps.event.addListener(marker, 'click', toggleBounce);
+                }
+            }
+
+            addSchoolMarkers();
+
+            function toggleBounce() {
+
+             if (marker.getAnimation() != null) {
+               marker.setAnimation(null);
+             } else {
+               marker.setAnimation(google.maps.Animation.BOUNCE);
+             }
+            }
+
+            //fit to bounds
+            var bounds = new google.maps.LatLngBounds();
+            var geocoder = new google.maps.Geocoder();
+            var address = /*[[${map.address}]]*/ null;
+            geocoder.geocode({
+                'address': address
+            }, function(results, status) {
+                if (status == google.maps.GeocoderStatus.OK) {
+                    map.setCenter(results[0].geometry.location);
+                    if (results[0].geometry.viewport)
+                        map.fitBounds(results[0].geometry.viewport);
+                }
+            });
+
+            var pointArray = new google.maps.MVCArray(ratingData);
+
+            heatmap = new google.maps.visualization.HeatmapLayer({
+                data: pointArray,
+                radius: 200,
+                opacity: 0.3
+            });
+
+            var gradient = [
+                            'rgba(255, 0, 0, 1)',
+                            'rgba(191, 0, 31, 1)',
+                            'rgba(127, 0, 63, 1)',
+                            'rgba(63, 0, 91, 1)',
+                            'rgba(0, 0, 127, 1)',
+                            'rgba(0, 0, 159, 1)',
+                            'rgba(0, 0, 191, 1)',
+                            'rgba(0, 0, 223, 1)',
+                            'rgba(0, 0, 255, 1)',
+                            'rgba(0, 63, 255, 1)',
+                            'rgba(0, 127, 255, 1)',
+                            'rgba(0, 135, 255, 1)',
+                            'rgba(0, 255, 100, 1)'
+                        ]
+            heatmap.set('gradient', heatmap.get('gradient') ? null : gradient);
+
+            heatmap.setMap(map);
+        }
+
+        google.maps.event.addDomListener(window, 'load', initialize);
+        /*]]>*/
+    </script>
+
+    <nav class="navbar navbar-default navbar-static-top navbar-map" role="navigation">
+        <div class="container-fluid">
+            <div class="navbar-header">
+                <a class="navbar-brand" href="/">
+                    <img class="logo-svg" src="/images/icon_23241_blue.svg">
+                    <h3 class="logo-text">DenFinder</h3>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="map-outer-container">
+        <div class="map-container">
+            <div class="panel panel-primary map-controls">
+                <div class="panel-heading">Neighborhood Qualities</div>
+                <div class="panel-body">
+                    <form th:action="@{/results}" th:object="${formData}" method="get">
+                        <div class="form-group">
+                            <label for="">
+                                Preferred Location
+                            </label>
+                            <input th:field="*{address}" type="text" class="form-control" placeholder="City, state or zip code" />
+                        </div>
+                        <div class="form-group">
+                            <label for="">
+                                Income Range
+                            </label>
+                            <select th:field="*{income}" name="" id="" class="form-control">
+                                <option value="0-25">Below $25K</option>
+                                <option value="25-50">Above $25K</option>
+                                <option value="50-75">Above $50K</option>
+                                <option value="75-100">Above $75K</option>
+                                <option value="100+">Above $100K</option>
+                                <option value="No Preference">No Preference</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="">Relationship Status</label>
+                            <select th:field="*{relationship}" name="" id="" class="form-control">
+                                <option value="Single">Single</option>
+                                <option value="Married">Married</option>
+                                <option value="No Preference">No Preference</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="">Age Range</label>
+                            <select th:field="*{age}" name="" id="" class="form-control">
+                                <option value="13-19">Teens</option>
+                                <option value="20-29">20's</option>
+                                <option value="30-39">30's</option>
+                                <option value="40-49">40's</option>
+                                <option value="50-59">50's</option>
+                                <option value="60+">60's</option>
+                                <option value="No Preference">No Preference</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="">Importance of School System Quality</label>
+                            <select th:field="*{school}" name="" id="" class="form-control">
+                                <option value="Very Important">Very Important</option>
+                                <option value="Somewhat Important">Somewhat Important</option>
+                                <option value="Not Very Important">Not Very Important</option>
+                                <option value="No Preference">No Preference</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-lg btn-block">Find Housing</button>
+                    </form>
+                </div>
+            </div>
+            <div id="map-canvas">
+            </div>
+        </div>
+    </div>
+
+
+    <!-- build:js scripts/main.js -->
+    <script src="/js/jquery.js"></script>
+    <script src="/js/bootstrap.js"></script>
+    <script src="/js/main.js"></script>
+    <!-- endbuild -->
+</body>
+
+</html>
+
+
+<!--
+<h1>Results</h1>
+<h2>Census API Data</h2>
+<div th:each="mapList : ${map}">
+    <div th:each="zone : ${mapList}">
+            <p th:text="'Rating: ' + ${zone.rating}" />
+            <p th:text="'Median Income: $' + ${zone.medianIncome}" />
+<p th:text="'Median Age: ' + ${zone.medianAge}" />
+<p th:text="'Number of Singles: ' + ${zone.numSingle}" />
+<p th:text="'Number Married: ' + ${zone.numMarried}" />
+<br/><br/>
+</div>
+</div>
+-->
